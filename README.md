@@ -1,249 +1,162 @@
-# FastAPI Authentication API with MySQL
+# FastAPI Authentication Backend with OTP
 
-This is a complete conversion of your Express.js authentication backend to FastAPI with MySQL.
+Complete authentication system with email verification and password reset using OTP.
 
-## Features
+## ✨ Features
 
-- **User registration with email verification (OTP)**
-- **Password reset with OTP**
-- Password hashing with bcrypt
-- HTTP-only cookie-based sessions
-- Token-based authentication (supports both cookies and Bearer tokens)
-- **OTP generation and verification with in-memory caching (no Redis required!)**
-- **Brute-force protection for OTP attempts**
-- Rate limiting on all endpoints
-- Security headers (Helmet equivalent)
-- CORS support
-- MySQL database with SQLAlchemy ORM
+- ✅ User registration with email verification (OTP)
+- ✅ Secure login with JWT tokens
+- ✅ Password reset with OTP
+- ✅ HTTP-only cookie sessions
+- ✅ In-memory OTP storage (no Redis needed)
+- ✅ Brute-force protection
+- ✅ Rate limiting
+- ✅ Security headers
+- ✅ MySQL database
 
-## Project Structure
+## 📁 Project Structure
 
 ```
-.
-├── main.py                 # Application entry point
-├── database.py            # Database connection and session
-├── redis_client.py        # Redis connection
-├── models.py              # SQLAlchemy models
-├── schemas.py             # Pydantic schemas for validation
-├── schemas_otp.py         # OTP-related schemas
-├── services/
-│   └── otp_service.py    # OTP business logic
+backend/
+├── main.py                      # App entry point
+├── database.py                  # MySQL connection
+├── models.py                    # User model
+├── schemas.py                   # Validation schemas
+├── requirements.txt             # Dependencies
+├── .env.example                 # Environment template
+├── .gitignore
+├── README.md
+├── AUTH_FLOW.md                 # Detailed auth guide
 ├── middleware/
-│   └── auth.py           # JWT authentication middleware
+│   └── auth.py                  # JWT middleware
 ├── routers/
-│   ├── auth.py           # Authentication routes
-│   └── otp.py            # OTP routes
-├── requirements.txt       # Python dependencies
-├── .env.example          # Environment variables template
-└── README.md             # This file
+│   └── auth_integrated.py       # Auth endpoints
+└── services/
+    └── otp_memory_service.py    # OTP service
 ```
 
-## Installation
+## 🚀 Quick Start
 
-1. **Create and activate a virtual environment:**
+### 1. Create Virtual Environment
 
 ```bash
-# Create virtual environment
 python -m venv venv
 
-# Activate virtual environment
-# On Windows:
+# Activate (Windows)
 venv\Scripts\activate
-# On macOS/Linux:
+
+# Activate (macOS/Linux)
 source venv/bin/activate
 ```
 
-2. **Install dependencies:**
+### 2. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Set up MySQL database:**
+### 3. Setup MySQL Database
 
-Create a MySQL database:
 ```sql
 CREATE DATABASE authdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-4. **Install and start Redis (OPTIONAL - Using in-memory storage by default):**
+### 4. Configure Environment
 
-If you want to use Redis instead of in-memory storage, edit `routers/auth_integrated.py`:
-```python
-# Change from:
-from services.otp_memory_service import otp_service
-# To:
-from services.otp_service import otp_service
-```
-
-**Windows:**
-- Download Redis from: https://github.com/microsoftarchive/redis/releases
-- Or use WSL: `sudo apt-get install redis-server && redis-server`
-- Or use Docker: `docker run -d -p 6379:6379 redis`
-
-**macOS:**
-```bash
-brew install redis
-brew services start redis
-```
-
-**Linux:**
-```bash
-sudo apt-get install redis-server
-sudo systemctl start redis
-```
-
-5. **Configure environment variables:**
-
-Copy `.env.example` to `.env` and update the values:
 ```bash
 cp .env.example .env
+# Edit .env with your MySQL credentials
 ```
 
-Edit `.env` with your configuration:
-- Update `MYSQL_URI` with your MySQL credentials
-- Update `REDIS_HOST`, `REDIS_PORT` if using custom Redis setup
-- Change `JWT_SECRET` to a secure random string
-- Set `CORS_ORIGIN` to your frontend URL
-- Set `NODE_ENV` to `production` when deploying
-
-6. **Run the application:**
+### 5. Run the Server
 
 ```bash
 python main.py
 ```
 
-Or with uvicorn directly:
+Server runs at: http://localhost:4000
+- API Docs: http://localhost:4000/docs
+- Alternative Docs: http://localhost:4000/redoc
+
+## 📚 API Endpoints
+
+### Registration Flow
+
+**1. Register (sends OTP)**
 ```bash
-uvicorn main:app --reload --port 4000
+POST /api/auth/register
+Body: { "name": "John", "email": "john@example.com", "password": "pass123" }
 ```
 
-The server will start at `http://localhost:4000`
+**2. Verify Email**
+```bash
+POST /api/auth/verify-email
+Body: { "email": "john@example.com", "otp": "123456" }
+```
 
-## API Endpoints
+**3. Login**
+```bash
+POST /api/auth/login
+Body: { "email": "john@example.com", "password": "pass123" }
+```
 
-### Authentication Routes (prefix: `/api/auth`)
+### Password Reset Flow
 
-#### Register (Step 1: Create Account)
-- **POST** `/api/auth/register`
-- Body: `{ "name": "John Doe", "email": "john@example.com", "password": "password123" }`
-- Response: `{ "message": "Registration successful. Please verify your email with the OTP sent.", "email": "john@example.com", "user_id": 1 }`
-- Note: User is created but not verified. OTP is sent (printed in console for development)
+**1. Request Reset**
+```bash
+POST /api/auth/forgot-password
+Body: { "email": "john@example.com" }
+```
 
-#### Verify Email (Step 2: Verify with OTP)
-- **POST** `/api/auth/verify-email`
-- Body: `{ "email": "john@example.com", "otp": "123456" }`
-- Response: `{ "user": { "id": 1, "name": "John Doe", "email": "john@example.com", "is_verified": true } }`
-- Sets JWT token cookie on success
+**2. Reset Password**
+```bash
+POST /api/auth/reset-password
+Body: { "email": "john@example.com", "otp": "123456", "new_password": "newpass123" }
+```
 
-#### Resend Verification OTP
-- **POST** `/api/auth/resend-verification-otp`
-- Body: `{ "email": "john@example.com" }`
-- Response: `{ "message": "Verification OTP resent successfully" }`
+### Other Endpoints
 
-#### Login
-- **POST** `/api/auth/login`
-- Body: `{ "email": "john@example.com", "password": "password123" }`
-- Response: `{ "user": { "id": 1, "name": "John Doe", "email": "john@example.com", "is_verified": true } }`
-- Note: Only verified users can login
+- `POST /api/auth/resend-verification-otp` - Resend OTP
+- `POST /api/auth/logout` - Logout
+- `GET /api/auth/me` - Get current user
 
-#### Forgot Password (Step 1: Request Reset)
-- **POST** `/api/auth/forgot-password`
-- Body: `{ "email": "john@example.com" }`
-- Response: `{ "message": "If the email exists, a password reset OTP has been sent" }`
+## 🔒 Security Features
 
-#### Reset Password (Step 2: Reset with OTP)
-- **POST** `/api/auth/reset-password`
-- Body: `{ "email": "john@example.com", "otp": "123456", "new_password": "newpassword123" }`
-- Response: `{ "message": "Password reset successfully" }`
-
-#### Logout
-- **POST** `/api/auth/logout`
-- Response: `{ "message": "Logged out" }`
-
-#### Get Current User
-- **GET** `/api/auth/me`
-- Headers: `Authorization: Bearer <token>` (or use cookie)
-- Response: `{ "user": { "id": 1, "name": "John Doe", "email": "john@example.com", "is_verified": true } }`
-
-### OTP Routes (prefix: `/api/otp`)
-
-#### Generate OTP
-- **POST** `/api/otp/generate`
-- Body: `{ "email": "john@example.com" }`
-- Response: `{ "message": "OTP sent successfully", "expires_in": 300 }`
-- Note: OTP is printed in console for development (remove in production)
-
-#### Verify OTP
-- **POST** `/api/otp/verify`
-- Body: `{ "email": "john@example.com", "otp": "123456" }`
-- Response: `{ "success": true, "message": "OTP verified successfully" }`
-
-#### Revoke OTP
-- **DELETE** `/api/otp/revoke`
-- Body: `{ "email": "john@example.com" }`
-- Response: `{ "message": "OTP revoked successfully" }`
-
-## Key Differences from Express.js
-
-1. **Database**: MongoDB → MySQL with SQLAlchemy ORM
-2. **Password Hashing**: bcryptjs → passlib with bcrypt
-3. **JWT**: jsonwebtoken → python-jose
-4. **Rate Limiting**: express-rate-limit → slowapi
-5. **Security Headers**: helmet → custom middleware
-6. **Validation**: Manual validation → Pydantic schemas
-
-## Security Features
-
-- HTTP-only cookies for token storage
-- CSRF protection with SameSite cookies
-- Secure cookies in production
+- Passwords hashed with bcrypt
+- JWT tokens in HTTP-only cookies
 - Rate limiting on all endpoints
-- Password hashing with bcrypt
-- JWT token expiration
-- Security headers (XSS, MIME sniffing, clickjacking protection)
+- OTP expiration (5 min verification, 10 min reset)
+- Max 5 failed OTP attempts
+- CORS protection
+- Security headers
 
-## Development
+## 🧪 Testing
 
-To run in development mode with auto-reload:
-```bash
-uvicorn main:app --reload --port 4000
-```
+Check console for OTP codes during development.
 
-## Production Deployment
+In production, integrate email service:
+- SendGrid
+- AWS SES
+- Mailgun
+- Twilio (SMS)
 
-1. Set `NODE_ENV=production` in your `.env` file
-2. Use a production-grade ASGI server like Gunicorn with Uvicorn workers:
+## 📖 Detailed Documentation
 
-```bash
-pip install gunicorn
-gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:4000
-```
+See `AUTH_FLOW.md` for:
+- Complete API examples
+- React/Frontend integration
+- Error handling
+- Email service integration
 
-## Testing with cURL
+## 🛠️ Tech Stack
 
-Register a user:
-```bash
-curl -X POST http://localhost:4000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"John Doe","email":"john@example.com","password":"password123"}' \
-  -c cookies.txt
-```
+- FastAPI - Web framework
+- SQLAlchemy - ORM
+- MySQL - Database
+- PyJWT - JWT tokens
+- Bcrypt - Password hashing
+- Pydantic - Validation
 
-Get current user:
-```bash
-curl -X GET http://localhost:4000/api/auth/me \
-  -b cookies.txt
-```
+## 📝 License
 
-Logout:
-```bash
-curl -X POST http://localhost:4000/api/auth/logout \
-  -b cookies.txt
-```
-
-## API Documentation
-
-FastAPI automatically generates interactive API documentation:
-- Swagger UI: `http://localhost:4000/docs`
-- ReDoc: `http://localhost:4000/redoc`
+MIT License - Free to use!
