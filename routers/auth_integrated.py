@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import bcrypt  # Using bcrypt directly instead of passlib
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -12,20 +12,36 @@ from schemas import (
 )
 from middleware.auth import create_access_token, get_current_user
 from services.otp_memory_service import otp_service  # Using in-memory (no Redis needed)
+from services.email_service import email_service
 # Or use: from services.otp_service import otp_service  # For Redis version
 import os
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
+# Password hashing with bcrypt directly
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash password using bcrypt"""
+    # Ensure password is bytes and truncate if needed
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
+    
+    # Generate salt and hash
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify password using bcrypt"""
+    # Ensure inputs are bytes
+    password_bytes = plain_password.encode('utf-8')
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
+    
+    hashed_bytes = hashed_password.encode('utf-8')
+    
+    return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 def set_token_cookie(response: Response, token: str):
     """Set token in httpOnly cookie"""
@@ -77,8 +93,12 @@ async def register(
     otp = otp_service.generate_otp(length=6, numeric_only=True)
     otp_service.store_otp(new_user.email, otp, expiry=300)  # 5 minutes
     
-    # TODO: Send OTP via email service (SendGrid, AWS SES, etc.)
-    print(f"[DEVELOPMENT] OTP for {new_user.email}: {otp}")  # Remove in production!
+    # Send OTP via email
+    email_sent = email_service.send_verification_otp(new_user.email, otp, new_user.name)
+    
+    if not email_sent:
+        # Fallback: print to console if email fails
+        print(f"[FALLBACK] OTP for {new_user.email}: {otp}")
     
     return {
         "message": "Registration successful. Please verify your email with the OTP sent.",
@@ -137,6 +157,9 @@ async def verify_email(
     # Reset verification attempts
     otp_service.reset_attempts(f"verify:{verify_data.email}")
     
+    # Send welcome email
+    email_service.send_welcome_email(user.email, user.name or "User")
+    
     # Generate token
     token = create_access_token({"id": user.id, "email": user.email})
     
@@ -171,8 +194,11 @@ async def resend_verification_otp(
     otp = otp_service.generate_otp(length=6, numeric_only=True)
     otp_service.store_otp(user.email, otp, expiry=300)
     
-    # TODO: Send OTP via email
-    print(f"[DEVELOPMENT] New OTP for {user.email}: {otp}")
+    # Send OTP via email
+    email_sent = email_service.send_verification_otp(user.email, otp, user.name)
+    
+    if not email_sent:
+        print(f"[FALLBACK] New OTP for {user.email}: {otp}")
     
     return {"message": "Verification OTP resent successfully"}
 
@@ -238,8 +264,11 @@ async def forgot_password(
         otp = otp_service.generate_otp(length=6, numeric_only=True)
         otp_service.store_otp(f"reset:{user.email}", otp, expiry=600)  # 10 minutes for password reset
         
-        # TODO: Send OTP via email
-        print(f"[DEVELOPMENT] Password reset OTP for {user.email}: {otp}")
+        # Send OTP via email
+        email_sent = email_service.send_password_reset_otp(user.email, otp, user.name)
+        
+        if not email_sent:
+            print(f"[FALLBACK] Password reset OTP for {user.email}: {otp}")
     
     return {"message": "If the email exists, a password reset OTP has been sent"}
 
