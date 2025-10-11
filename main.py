@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 
 from database import engine, Base
-from routers import auth_integrated
+from routers import auth_integrated, blog  
 
 load_dotenv()
 
@@ -45,6 +45,7 @@ def create_app(cors_origin: str = "*"):
     
     # Include routers
     app.include_router(auth_integrated.router, prefix="/api/auth", tags=["auth"])
+    app.include_router(blog.router, prefix="/api/blogs", tags=["blogs"]) 
     
     return app
 

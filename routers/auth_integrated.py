@@ -5,7 +5,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from database import get_db
-from models import User
+from models.user import User
 from schemas import (
     UserRegister, UserLogin, UserOut, MessageResponse, UserResponse,
     VerifyEmailRequest, ForgotPasswordRequest, ResetPasswordRequest
